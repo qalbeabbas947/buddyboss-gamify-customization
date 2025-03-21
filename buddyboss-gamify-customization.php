@@ -99,31 +99,9 @@ class Buddyboss_Gamify_Customization_Addon {
 }
 
 /**
- * Display admin notifications if dependency not found.
- */
-function bgc_ready() {
-
-    if( ! is_admin() ) {
-        return;
-    }
-
-    // if( ! class_exists( 'PeepSo' ) ) {
-    //     deactivate_plugins ( plugin_basename ( __FILE__ ), true );
-    //     $class = 'notice is-dismissible error';
-    //     $message = __( 'Peepso Customization Add-on requires PeepSo Plugin to be activated.', 'bgc-customization' );
-    //     printf ( '<div id="message" class="%s"> <p>%s</p></div>', $class, $message );
-    // }
-}
-
-/**
  * @return bool
  */
 function BGC_Instance() {
-
-    // if ( ! class_exists( 'PeepSo' ) ) {
-    //     add_action( 'admin_notices', 'bgc_ready' );
-    //     return false;
-    // }
 
     return Buddyboss_Gamify_Customization_Addon::instance();
 }

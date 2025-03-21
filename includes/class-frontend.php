@@ -37,9 +37,23 @@ class PSC_Frontend {
     private function hooks() {
 
 		  add_filter( 'bp_get_template_stack', [ $this, 'override_template' ], 10, 1 );
+      add_action( 'wp_enqueue_scripts', [ $this, 'theme_scripts' ], 999 );
 
     }
     
+    /**
+     * Add front end script file
+     */
+    public function theme_scripts() {
+
+        
+        wp_enqueue_script( 'psc-front-stripe-js', BGC_ASSETS_URL.'js/front.js', ['jquery'], time(), true );
+
+        wp_localize_script( 'psc-front-stripe-js', 'PSC_VARS', [ 
+            'ajaxURL' => admin_url( 'admin-ajax.php' ),
+            
+        ] );
+    }
     
     /**
      * Override the stream template
@@ -82,8 +96,8 @@ function bp_nouveau_signup_community_guidelines() {
       ?>
         <div class="input-options checkbox-options">
           <div class="bp-checkbox-wrap">
-            <input type="checkbox" name="legal_agreement" id="legal_agreement" value="1" class="bs-styled-checkbox">
-            <label for="legal_agreement" class="option-label"><?php printf( __( 'I agree to the %1$s.', 'bgc-customization' ), $community_guidelines_link ); ?></label>
+            <input type="checkbox" required name="community_guidelines_agreement" id="community_guidelines_agreement" value="1" class="bs-styled-checkbox">
+            <label for="community_guidelines_agreement" class="option-label"><?php printf( __( 'I agree to the %1$s.', 'bgc-customization' ), $community_guidelines_link ); ?></label>
           </div>
         </div>
 

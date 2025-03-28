@@ -38,9 +38,47 @@ class PSC_Frontend {
 
 		  add_filter( 'bp_get_template_stack', [ $this, 'override_template' ], 10, 1 );
       add_action( 'wp_enqueue_scripts', [ $this, 'theme_scripts' ], 999 );
+      add_action( 'admin_init', [ $this, 'save_points_to_gamipress'] );
 
     }
     
+    /**
+     * save points to gamipress
+     */
+    public function save_points_to_gamipress() {
+      
+      $search = Football_Pool_Utils::request_str( 's' );
+
+      $question_id = Football_Pool_Utils::request_int( 'item_id', 0 );
+      $bulk_ids = Football_Pool_Utils::post_int_array( 'itemcheck' );
+      $action = Football_Pool_Utils::request_string( 'action', 'list' );
+
+      if ( count( $bulk_ids ) > 0 && $action === '-1' )
+        $action = Football_Pool_Utils::request_string( 'action2', 'list' );
+
+      $search_submit = ( Football_Pool_Utils::post_str( 'search_submit', '' ) !== '' );
+      if ( $search_submit ) {
+        $action = Football_Pool_Utils::post_str( 'prev_action', 'list' );
+      }
+
+      if( $action == 'user-answers-save' ) {
+        global $wpdb;
+
+        $prefix = FOOTBALLPOOL_DB_PREFIX;
+        
+        $users = get_users( );
+        foreach ( $users as $user ) {
+          $user_points = gamipress_get_user_points( $user->ID, 'flags' );
+          $sql = "SELECT sum(points) as points FROM {$prefix}bonusquestions_useranswers where correct = 1 and user_id='".$user->ID."'";
+          $footbal_points = $wpdb->get_var( $sql );
+          
+          if( intval( $user_points ) < intval( $footbal_points ) ) {
+            gamipress_award_points_to_user( $user->ID, (intval( $footbal_points ) - intval( $user_points )), 'flags' );
+          }
+        }
+      }
+    }
+
     /**
      * Add front end script file
      */
@@ -91,7 +129,7 @@ function bp_nouveau_signup_community_guidelines() {
       $content = apply_filters('the_content', $content);
       $content = str_replace(']]>', ']]&gt;', $content);
       
-
+ 
       $community_guidelines_link   = '<a class="popup-modal-register popup-terms" href="#terms-modal">' . $title . '</a>';
       ?>
         <div class="input-options checkbox-options">

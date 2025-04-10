@@ -106,4 +106,3 @@ function BGC_Instance() {
     return Buddyboss_Gamify_Customization_Addon::instance();
 }
 add_action( 'plugins_loaded', 'BGC_Instance' );
-

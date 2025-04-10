@@ -40,78 +40,7 @@ class PSC_Frontend {
       add_action( 'wp_enqueue_scripts', [ $this, 'theme_scripts' ], 999 );
       add_action( 'admin_init', [ $this, 'save_points_to_gamipress'] );
       add_action('football_pool_score_calculation_final_before',[ $this, 'score_calculation_final'], 999, 0);
-
-      // try {
-      //   remove_all_actions('wp_ajax_nopriv_footballpool_update_team_prediction');
-      //   remove_all_actions('wp_ajax_footballpool_update_team_prediction');
-
-      // } catch(Exception $e) {
-      //   echo 'Message: ' .$e->getMessage();
-      // }
-
-      //add_action( 'wp_ajax_footballpool_update_team_prediction', [ $this, 'update_prediction' ] );    
-      
-      //add_filter( 'footballpool_score_calc_function_post',  [ $this, 'score_calc_function' ], 999, 2  );
-
-      // add_action( 'init', function(){
-
-      //   global $wpdb;
-		  //   $prefix = FOOTBALLPOOL_DB_PREFIX;
-      //   $user_id = 1;
-      //   $pool = new Football_Pool_Pool( FOOTBALLPOOL_DEFAULT_SEASON );
-      //   $matches = $pool->matches;
-      //   $user_match_info = $matches->get_match_info_for_user_unfiltered( $user_id );
-
-      //   $total_score = 0;
-      //   $full = 0;
-      //   $toto = 0;
-      //   $goal_bonus = 0;
-      //   $goal_diff_bonus = 0;
-      //   $joker_used = 0;
-
-      //   foreach ( $user_match_info as $record ) {
-
-      //     // Get user prediction for the current match
-      //     $sql = $wpdb->prepare( "SELECT home_score, away_score, has_joker 
-      //                 FROM {$prefix}predictions 
-      //                 WHERE user_id = %d AND match_id = %d"
-      //                 , $user_id, $record['id'] );
-      //     $row = $wpdb->get_row( $sql, ARRAY_A );
-      //     if ( $row !== null ) {
-      //       $user_home = is_numeric( $row['home_score'] ) ? (int) $row['home_score'] : null;
-      //       $user_away = is_numeric( $row['away_score'] ) ? (int) $row['away_score'] : null;
-      //       $has_joker = (int) $row['has_joker'];
-      //     }
-
-      //     $match_score = $pool->calc_score(
-      //       (int) $record['home_score'],
-      //       (int) $record['away_score'],
-      //       $user_home,
-      //       $user_away,
-      //       (int) $has_joker,
-      //       (int) $record['id'],
-      //       $user_id
-      //     );
-      //     print_r($match_score);
-      //     $total_score += $match_score['score'];
-      //     $full += $match_score['full'];
-      //     $toto += $match_score['toto'];
-      //     $goal_bonus += $match_score['goal_bonus'];
-      //     $goal_diff_bonus += $match_score['goal_diff_bonus'];
-      //     $joker_used += (int) $row['has_joker'];
-      //   }
-      //   //echo '<pre>';
-      //   echo '<br>total_score:'.$total_score;
-      //   echo '<br>full:'.$full;
-      //   echo '<br>toto:'.$toto;
-      //   echo '<br>goal_bonus:'.$goal_bonus;
-      //   echo '<br>goal_diff_bonus:'.$goal_diff_bonus;
-      //   echo '<br>joker_used:'.$joker_used;
-      //   //print_r($user_match_info);exit;
-      // } );
     }
-    
-    
 
     /**
      * process points
@@ -126,135 +55,14 @@ class PSC_Frontend {
       $users = $pool->get_users( 0 );
       foreach ( $users as $user ) {
         $user_id = $user['user_id'];
-        $footbal_points = $wpdb->get_var( $wpdb->prepare("SELECT SUM( score ) AS score FROM {$prefix}{$new_history_table} where user_id=%d", $user_id) );
+        $footbal_points = $wpdb->get_var( $wpdb->prepare("SELECT total_score FROM {$prefix}{$new_history_table} where user_id=%d order by score_date desc", $user_id) );
         $user_points = gamipress_get_user_points( $user_id, 'flags' );
         if( intval( $user_points ) < intval( $footbal_points ) ) {
           gamipress_award_points_to_user( $user_id, (intval( $footbal_points ) - intval( $user_points )), 'flags' );
         }
       }
-    }
-    /**
-     * save points to gamipress
-     */
-    public function score_calc_function( $score, $scoring_vars=[] ) {
-      
-      $user_id = $scoring_vars[ 'user_id' ];
-      if( intval( $user_id ) <= 0 ) {
-        $user_id = get_current_user_id();
-      }
-
-      if( intval( $user_id ) > 0 ) {
-        $user_points = gamipress_get_user_points( $user_id, 'flags' );
-        $footbal_points = $score[ 'score' ];
-        
-        if( intval( $user_points ) < intval( $footbal_points ) ) {
-
-          gamipress_award_points_to_user( $user_id, (intval( $footbal_points ) - intval( $user_points )), 'flags' );
-        }
-      }
-
-      return $score;
     }
     
-    /**
-     * save points to gamipress
-     */
-    public function update_prediction() {
-      check_ajax_referer( FOOTBALLPOOL_NONCE_PREDICTION_SAVE, 'fp_match_nonce' );
-
-      $user_id = get_current_user_id();
-      $match_id = Football_Pool_Utils::post_int( 'match' );
-      $type = Football_Pool_Utils::post_enum( 'type', [ 'home', 'away' ], 'home' ); // home or away
-      $prediction = Football_Pool_Utils::post_string( 'prediction' );
-  
-      // get predictions for this user
-      $pool = new Football_Pool_Pool( FOOTBALLPOOL_DEFAULT_SEASON );
-      $matches = $pool->matches;
-      $user_match_info = $matches->get_match_info_for_user_unfiltered( $user_id );
-
-      $params = array();
-      $params['return_code'] = true;
-      $params['msg'] = '';
-      $params['prev_prediction'] = $user_match_info[ $match_id ]["{$type}_score"] ?? null;
-
-      do_action( 'footballpool_prediction_update_before', $params );
-
-      if ( $user_id <= 0 || ! $pool->user_is_player( $user_id ) ) {
-        $params['return_code'] = false;
-        $params['msg'] = __( 'Permission denied!1', 'football-pool' );
-        Football_Pool_Utils::log_message( $user_id, FOOTBALLPOOL_TYPE_MATCH, $match_id, 0, $params['msg'] );
-      } else {
-        if ( ! isset( $user_match_info[ $match_id ] ) || ! $user_match_info[ $match_id ]['match_is_editable'] ) {
-          $params['return_code'] = false;
-          $params['msg'] = __( 'Changing this prediction is not allowed.1', 'football-pool' );
-          Football_Pool_Utils::log_message( $user_id, FOOTBALLPOOL_TYPE_MATCH, $match_id, 0, $params['msg'] );
-        } else {
-          // Good to go, let's save the prediction.
-          global $wpdb;
-          $prefix = FOOTBALLPOOL_DB_PREFIX;
-
-          if ( $prediction === '' || ! is_numeric( $prediction ) ) {
-            if ( $user_match_info[ $match_id ]['has_prediction'] === true ) {
-              // prediction exists, so update it
-              $sql = $wpdb->prepare(
-                "UPDATE {$prefix}predictions SET {$type}_score = NULL 
-                WHERE user_id = %d AND match_id = %d"
-                , $user_id, $match_id
-              );
-            } else {
-              // no values yet, so we can safely insert null for both scores
-              $sql = $wpdb->prepare(
-                "INSERT INTO {$prefix}predictions ( user_id, match_id, home_score, away_score, has_joker ) 
-                VALUES ( %d, %d, NULL, NULL, 0 )" 
-                , $user_id, $match_id
-              );
-            }
-          } else {
-            $prediction = (int) $prediction;
-
-            if ( $user_match_info[ $match_id ]['has_prediction'] === true ) {
-              $sql = $wpdb->prepare(
-                "UPDATE {$prefix}predictions SET {$type}_score = %d
-                WHERE user_id = %d AND match_id = %d"
-                , $prediction, $user_id, $match_id
-              );
-            } else {
-              // determine which value to set
-              if ( $type === 'home' ) {
-                $values = "{$prediction}, NULL";
-              } else {
-                $values = "NULL, {$prediction}";
-              }
-
-              $sql = $wpdb->prepare(
-                "INSERT INTO {$prefix}predictions ( user_id, match_id, home_score, away_score, has_joker ) 
-                VALUES ( %d, %d, {$values}, 0 )"
-                , $user_id, $match_id
-              );
-            }
-          }
-
-          $result = $wpdb->query( $sql );
-          if ( $result === false ) {
-            $params['return_code'] = false;
-            $params['msg'] = __( 'Something went wrong while saving the prediction.1', 'football-pool' );
-            Football_Pool_Utils::log_error_message( $user_id, FOOTBALLPOOL_TYPE_MATCH, $match_id );
-          } else { 
-              $match = $pool->matches->all_matches[ $match_id ];
-              $match = "{$match['home_team']}-{$match['away_team']}";
-              Football_Pool_Utils::log_message( $user_id, FOOTBALLPOOL_TYPE_MATCH, $match_id, 1, "Match {$match_id}: {$match} {$type} value '{$prediction}' saved."
-            );
-          }
-        }
-      }
-
-      $params = apply_filters( 'footballpool_prediction_params', $params, $user_match_info );
-      do_action( 'footballpool_prediction_update_after', $params );
-
-      // return the result
-      Football_Pool_Utils::ajax_response( $params );
-    }
-
     /**
      * save points to gamipress
      */

@@ -5,7 +5,6 @@
  * Do not allow directly accessing this file.
  */
 if( ! defined( 'ABSPATH' ) ) exit;
-
 /**
  * Class PSC_Frontend
  */
@@ -40,12 +39,85 @@ class PSC_Frontend {
       add_action( 'wp_enqueue_scripts', [ $this, 'theme_scripts' ], 999 );
       add_action( 'admin_init', [ $this, 'save_points_to_gamipress'] );
       add_action('football_pool_score_calculation_final_before',[ $this, 'score_calculation_final'], 999, 0);
+      add_filter('bp_notifications_get_notifications_for_user', [ $this, 'format_custom_friend_notification'], 10, 5);
+      add_filter( 'bp_notifications_get_registered_components', [ $this, 'register_notifications_component'] );
+      add_action('bp_actions', [ $this, 'handle_custom_notification_click']);
+
+      // if( isset( $_REQUEST['notification'] ) ) {
+      //   add_action('init', function(){
+      //           $item_id = time();
+      //           $user_id = 13;
+
+      //           bp_notifications_add_notification([
+      //                   'user_id'           => get_current_user_id(),
+      //                   'item_id'           => time(),
+      //                   'secondary_item_id' => 0,
+      //                   'component_name'    => 'flag_points_award',
+      //                   'component_action'  => 'flag_points_award_msg',
+      //                   'date_notified'     => bp_core_current_time(),
+      //                   'is_new'            => 1,
+      //               ]);
+
+      //         });
+      //   }
+    }
+
+    /**
+     * Format the custom notification
+     */
+    public function format_custom_friend_notification($action, $item_id, $secondary_item_id, $total_items, $format = 'string') {
+        if ('flag_points_award_msg' === $action) {
+            $initiator_name = bp_core_get_user_displayname($item_id);
+            $custom_message = __('%d flag points are awarded', 'textdomain');
+            
+            // For string format (dropdown)
+            if ('string' === $format) {
+                return sprintf($custom_message, $item_id);
+            } else {
+                return [
+                    'text' => sprintf($custom_message, $item_id),
+                    'link' => bp_core_get_user_domain($item_id) // Link to user's profile
+                ];
+            }
+        }
+        
+        return $action;
+    }
+
+    /**
+     * creates the component
+     */
+    function register_notifications_component( $component_names = array() ) {
+
+        // Force $component_names to be an array
+        if ( ! is_array( $component_names ) ) {
+            $component_names = array();
+        }
+
+        // Add the custom component
+        array_push( $component_names, 'flag_points_award' );
+
+        return $component_names;
+
+    }
+
+    /**
+     * Handle notification clicks
+     */
+    public function handle_custom_notification_click() {
+        if (bp_is_current_component('custom-friends') && isset($_GET['nid'])) {
+            // Mark as read
+            bp_notifications_mark_notification((int) $_GET['nid'], false);
+            
+            // Redirect to friend's profile
+            bp_core_redirect(bp_core_get_user_domain((int) $_GET['item_id']));
+        }
     }
 
     /**
      * process points
      */
-    function score_calculation_final(){
+    public function score_calculation_final(){
         
       global $wpdb;
 
@@ -59,6 +131,17 @@ class PSC_Frontend {
         $user_points = gamipress_get_user_points( $user_id, 'flags' );
         if( intval( $user_points ) < intval( $footbal_points ) ) {
           gamipress_award_points_to_user( $user_id, (intval( $footbal_points ) - intval( $user_points )), 'flags' );
+
+          // Add the notification to the user
+          bp_notifications_add_notification([
+                  'user_id'           => $user_id,
+                  'item_id'           => (intval( $footbal_points ) - intval( $user_points )),
+                  'secondary_item_id' => 0,
+                  'component_name'    => 'flag_points_award',
+                  'component_action'  => 'flag_points_award_msg',
+                  'date_notified'     => bp_core_current_time(),
+                  'is_new'            => 1,
+              ]);
         }
       }
     }
@@ -86,14 +169,27 @@ class PSC_Frontend {
         global $wpdb;
 
         $prefix = FOOTBALLPOOL_DB_PREFIX;
+        $pool = new Football_Pool_Pool( FOOTBALLPOOL_DEFAULT_SEASON );
+        $new_history_table = $pool->get_score_table( false );
+
         $users = get_users( );
         foreach ( $users as $user ) {
           $user_points = gamipress_get_user_points( $user->ID, 'flags' );
           $sql = "SELECT sum(points) as points FROM {$prefix}bonusquestions_useranswers where correct = 1 and user_id='".$user->ID."'";
           $footbal_points = $wpdb->get_var( $sql );
-          
-          if( intval( $user_points ) < intval( $footbal_points ) ) {
-            gamipress_award_points_to_user( $user->ID, (intval( $footbal_points ) - intval( $user_points )), 'flags' );
+          $history_points = $wpdb->get_var( $wpdb->prepare("SELECT total_score FROM {$prefix}{$new_history_table} where user_id=%d order by score_date desc", $user->ID) );
+
+          if( intval( $user_points ) < ( intval( $footbal_points ) + intval( $history_points ) ) ) {
+            gamipress_award_points_to_user( $user->ID, (( intval( $footbal_points ) + intval( $history_points ) ) - intval( $user_points )), 'flags' );
+            bp_notifications_add_notification([
+                  'user_id'           => $user->ID,
+                  'item_id'           => (( intval( $footbal_points ) + intval( $history_points ) ) - intval( $user_points )),
+                  'secondary_item_id' => 0,
+                  'component_name'    => 'flag_points_award',
+                  'component_action'  => 'flag_points_award_msg',
+                  'date_notified'     => bp_core_current_time(),
+                  'is_new'            => 1,
+              ]);
           }
         }
       }
@@ -168,8 +264,4 @@ function bp_nouveau_signup_community_guidelines() {
       <?php
 
     }
-    
-
-			
 }
-

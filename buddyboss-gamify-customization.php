@@ -81,6 +81,11 @@ class Buddyboss_Gamify_Customization_Addon {
          * Version
          */
         define( 'BGC_VERSION', self::VERSION );
+
+        /**
+         * Version
+         */
+        define( 'BGC_POINT_TYPE', 'flags' );
     }
 
     /**

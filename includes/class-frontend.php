@@ -42,24 +42,59 @@ class PSC_Frontend {
       add_filter('bp_notifications_get_notifications_for_user', [ $this, 'format_custom_friend_notification'], 10, 5);
       add_filter( 'bp_notifications_get_registered_components', [ $this, 'register_notifications_component'] );
       add_action('bp_actions', [ $this, 'handle_custom_notification_click']);
+      
+      add_action( 'activity_loop_start', [ $this, 'activity_loop_start_callback' ] );
+      
+    }
 
-      // if( isset( $_REQUEST['notification'] ) ) {
-      //   add_action('init', function(){
-      //           $item_id = time();
-      //           $user_id = 13;
+    /**
+     * Format the custom notification
+     */
+    public function activity_loop_start_callback(){
 
-      //           bp_notifications_add_notification([
-      //                   'user_id'           => get_current_user_id(),
-      //                   'item_id'           => time(),
-      //                   'secondary_item_id' => 0,
-      //                   'component_name'    => 'flag_points_award',
-      //                   'component_action'  => 'flag_points_award_msg',
-      //                   'date_notified'     => bp_core_current_time(),
-      //                   'is_new'            => 1,
-      //               ]);
-
-      //         });
-      //   }
+      $user_id = get_current_user_id();
+      $user_name = '';
+      $earned_question_points = bp_get_user_meta( $user_id, 'bp_last_earned_question_points', true );
+      $earned_points = bp_get_user_meta( $user_id , 'bp_last_earned_points', true );
+      $earned_point_type = bp_get_user_meta( $user_id , 'bp_last_earned_point_type', true );
+      $points_type = get_page_by_path(BGC_POINT_TYPE, OBJECT, 'points-type'); // Change 'post' to your CPT if needed
+      $pt_url = '';
+      if ($points_type) {
+          $post_id = $points_type->ID;
+          $pt_url = get_the_post_thumbnail_url( $post_id, 'medium' );
+      }
+      
+      if( $user_id ) {
+        $user_info = get_userdata($user_id);
+        if ($user_info) {
+            $user_name = $user_info->user_login;
+        }
+      }
+      if( intval( $earned_points ) > 0 ) {
+        ?>
+          <div class="bgc_activity_loop_points_notices">
+            <div class="bgc_points_user_image">
+              <img height="50px" src="<?php echo get_avatar_url( $user_id );?>">
+            </div>
+            <div class="bgc_points_user_description">
+              <?php echo sprintf(__( '%s ha guadagnato %d Bandierine', 'buddyboss', 'bgc-customization' ), $user_name,  intval($earned_points)); ?><br>
+              <?php echo sprintf(__( '%s earned %d %s', 'buddyboss', 'bgc-customization' ), $user_name, intval($earned_points), $earned_point_type ); ?>
+            </div>
+          </div> 
+          <div class="bgc_activity_loop_preditions_notices">
+            <div class="bgc_points_user_image">
+              <img height="50px" src="<?php echo $pt_url;?>">
+            </div>
+            <div class="bgc_points_user_description">
+              <?php if( intval( $earned_question_points ) > 0 ) { ?>
+                <?php echo sprintf(__( '%d flags for predicting one question correctly', 'buddyboss', 'bgc-customization' ), intval($earned_question_points)); ?><br>
+              <?php } ?>
+              <?php echo sprintf(__( '%d stars for correct result prediction', 'buddyboss', 'bgc-customization' ), intval($earned_points)); ?>
+            </div>
+          </div>
+        <?php
+      }
+      
     }
 
     /**
@@ -127,21 +162,24 @@ class PSC_Frontend {
       $users = $pool->get_users( 0 );
       foreach ( $users as $user ) {
         $user_id = $user['user_id'];
-        $footbal_points = $wpdb->get_var( $wpdb->prepare("SELECT total_score FROM {$prefix}{$new_history_table} where user_id=%d order by score_date desc", $user_id) );
-        $user_points = gamipress_get_user_points( $user_id, 'flags' );
+        $footbal_points = $wpdb->get_var( $wpdb->prepare( "SELECT total_score FROM {$prefix}{$new_history_table} where user_id=%d order by score_date desc", $user_id ) );
+        $user_points = gamipress_get_user_points( $user_id, BGC_POINT_TYPE );
         if( intval( $user_points ) < intval( $footbal_points ) ) {
-          gamipress_award_points_to_user( $user_id, (intval( $footbal_points ) - intval( $user_points )), 'flags' );
+          gamipress_award_points_to_user( $user_id, (intval( $footbal_points ) - intval( $user_points )), BGC_POINT_TYPE );
+          
+          update_user_meta( $user_id , 'bp_last_earned_points', (intval( $footbal_points ) - intval( $user_points )) );
+          update_user_meta( $user_id , 'bp_last_earned_point_type', BGC_POINT_TYPE );
 
           // Add the notification to the user
           bp_notifications_add_notification([
                   'user_id'           => $user_id,
-                  'item_id'           => (intval( $footbal_points ) - intval( $user_points )),
+                  'item_id'           => ( intval( $footbal_points ) - intval( $user_points ) ),
                   'secondary_item_id' => 0,
                   'component_name'    => 'flag_points_award',
                   'component_action'  => 'flag_points_award_msg',
                   'date_notified'     => bp_core_current_time(),
-                  'is_new'            => 1,
-              ]);
+                  'is_new'            => 1
+              ] );
         }
       }
     }
@@ -174,13 +212,13 @@ class PSC_Frontend {
 
         $users = get_users( );
         foreach ( $users as $user ) {
-          $user_points = gamipress_get_user_points( $user->ID, 'flags' );
+          $user_points = gamipress_get_user_points( $user->ID, BGC_POINT_TYPE );
           $sql = "SELECT sum(points) as points FROM {$prefix}bonusquestions_useranswers where correct = 1 and user_id='".$user->ID."'";
           $footbal_points = $wpdb->get_var( $sql );
           $history_points = $wpdb->get_var( $wpdb->prepare("SELECT total_score FROM {$prefix}{$new_history_table} where user_id=%d order by score_date desc", $user->ID) );
 
           if( intval( $user_points ) < ( intval( $footbal_points ) + intval( $history_points ) ) ) {
-            gamipress_award_points_to_user( $user->ID, (( intval( $footbal_points ) + intval( $history_points ) ) - intval( $user_points )), 'flags' );
+            gamipress_award_points_to_user( $user->ID, (( intval( $footbal_points ) + intval( $history_points ) ) - intval( $user_points )), BGC_POINT_TYPE );
             bp_notifications_add_notification([
                   'user_id'           => $user->ID,
                   'item_id'           => (( intval( $footbal_points ) + intval( $history_points ) ) - intval( $user_points )),
@@ -190,6 +228,11 @@ class PSC_Frontend {
                   'date_notified'     => bp_core_current_time(),
                   'is_new'            => 1,
               ]);
+            
+            $sql = "SELECT points FROM {$prefix}bonusquestions_useranswers where correct = 1 and user_id='".$user->ID."' order by question_id desc";
+            $footbal_points = $wpdb->get_var( $sql );
+            
+            update_user_meta( $user->ID , 'bp_last_earned_question_points', (intval( $footbal_points ) - intval( $user_points )) );
           }
         }
       }
@@ -200,13 +243,13 @@ class PSC_Frontend {
      */
     public function theme_scripts() {
 
-        
-        wp_enqueue_script( 'psc-front-stripe-js', BGC_ASSETS_URL.'js/front.js', ['jquery'], time(), true );
+      wp_enqueue_style( 'psc-front-css', BGC_ASSETS_URL . 'css/front.css',  array(), BGC_VERSION, false);
+      wp_enqueue_script( 'psc-front-stripe-js', BGC_ASSETS_URL.'js/front.js', ['jquery'], BGC_VERSION, true );
 
-        wp_localize_script( 'psc-front-stripe-js', 'PSC_VARS', [ 
-            'ajaxURL' => admin_url( 'admin-ajax.php' ),
-            
-        ] );
+      wp_localize_script( 'psc-front-stripe-js', 'PSC_VARS', [ 
+          'ajaxURL' => admin_url( 'admin-ajax.php' ),
+          
+      ] );
     }
     
     /**

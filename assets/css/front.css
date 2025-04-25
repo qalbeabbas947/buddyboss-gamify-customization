@@ -1,0 +1,26 @@
+.bgc_activity_loop_points_notices{
+    display: flex;
+    height: 50px;
+    box-shadow: 2px 2px white;
+    margin-top: 10px;
+    border-top: 1px solid #D5D6D9 ;
+    background-color: white;
+    border-radius: 5px;
+}
+
+.bgc_activity_loop_preditions_notices{
+    display: flex;height: 50px;
+    box-shadow: 2px 2px white;
+    margin-top: 20px;
+    border-top: 1px solid #D5D6D9 ;
+    background-color: white;
+    border-radius: 5px;
+}
+.bgc_points_user_image {
+    width: 15%;
+}
+
+.bgc_points_user_image img{
+    height: 50px;
+    border-radius: 10px;
+}

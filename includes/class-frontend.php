@@ -43,59 +43,11 @@ class PSC_Frontend {
       add_filter( 'bp_notifications_get_registered_components', [ $this, 'register_notifications_component'] );
       add_action('bp_actions', [ $this, 'handle_custom_notification_click']);
       
-      add_action( 'activity_loop_start', [ $this, 'activity_loop_start_callback' ] );
+      //add_action( 'activity_loop_start', [ $this, 'activity_loop_start_callback' ] );
       
     }
 
-    /**
-     * Format the custom notification
-     */
-    public function activity_loop_start_callback(){
-
-      $user_id = get_current_user_id();
-      $user_name = '';
-      $earned_question_points = bp_get_user_meta( $user_id, 'bp_last_earned_question_points', true );
-      $earned_points = bp_get_user_meta( $user_id , 'bp_last_earned_points', true );
-      $earned_point_type = bp_get_user_meta( $user_id , 'bp_last_earned_point_type', true );
-      $points_type = get_page_by_path(BGC_POINT_TYPE, OBJECT, 'points-type'); // Change 'post' to your CPT if needed
-      $pt_url = '';
-      if ($points_type) {
-          $post_id = $points_type->ID;
-          $pt_url = get_the_post_thumbnail_url( $post_id, 'medium' );
-      }
-      
-      if( $user_id ) {
-        $user_info = get_userdata($user_id);
-        if ($user_info) {
-            $user_name = $user_info->user_login;
-        }
-      }
-      if( intval( $earned_points ) > 0 ) {
-        ?>
-          <div class="bgc_activity_loop_points_notices">
-            <div class="bgc_points_user_image">
-              <img height="50px" src="<?php echo get_avatar_url( $user_id );?>">
-            </div>
-            <div class="bgc_points_user_description">
-              <?php echo sprintf(__( '%s ha guadagnato %d Bandierine', 'buddyboss', 'bgc-customization' ), $user_name,  intval($earned_points)); ?><br>
-              <?php echo sprintf(__( '%s earned %d %s', 'buddyboss', 'bgc-customization' ), $user_name, intval($earned_points), $earned_point_type ); ?>
-            </div>
-          </div> 
-          <div class="bgc_activity_loop_preditions_notices">
-            <div class="bgc_points_user_image">
-              <img height="50px" src="<?php echo $pt_url;?>">
-            </div>
-            <div class="bgc_points_user_description">
-              <?php if( intval( $earned_question_points ) > 0 ) { ?>
-                <?php echo sprintf(__( '%d flags for predicting one question correctly', 'buddyboss', 'bgc-customization' ), intval($earned_question_points)); ?><br>
-              <?php } ?>
-              <?php echo sprintf(__( '%d stars for correct result prediction', 'buddyboss', 'bgc-customization' ), intval($earned_points)); ?>
-            </div>
-          </div>
-        <?php
-      }
-      
-    }
+    
 
     /**
      * Format the custom notification
@@ -165,25 +117,73 @@ class PSC_Frontend {
         $footbal_points = $wpdb->get_var( $wpdb->prepare( "SELECT total_score FROM {$prefix}{$new_history_table} where user_id=%d order by score_date desc", $user_id ) );
         $user_points = gamipress_get_user_points( $user_id, BGC_POINT_TYPE );
         if( intval( $user_points ) < intval( $footbal_points ) ) {
-          gamipress_award_points_to_user( $user_id, (intval( $footbal_points ) - intval( $user_points )), BGC_POINT_TYPE );
+
+          $updated_points = (intval( $footbal_points ) - intval( $user_points ));
+          gamipress_award_points_to_user( $user_id, $updated_points, BGC_POINT_TYPE );
           
-          update_user_meta( $user_id , 'bp_last_earned_points', (intval( $footbal_points ) - intval( $user_points )) );
+          update_user_meta( $user_id , 'bp_last_earned_points', $updated_points );
           update_user_meta( $user_id , 'bp_last_earned_point_type', BGC_POINT_TYPE );
 
           // Add the notification to the user
           bp_notifications_add_notification([
                   'user_id'           => $user_id,
-                  'item_id'           => ( intval( $footbal_points ) - intval( $user_points ) ),
+                  'item_id'           => $updated_points,
                   'secondary_item_id' => 0,
                   'component_name'    => 'flag_points_award',
                   'component_action'  => 'flag_points_award_msg',
                   'date_notified'     => bp_core_current_time(),
                   'is_new'            => 1
               ] );
+
+          $this->activity_loop_start_callback( $user_id, $updated_points );
         }
       }
     }
     
+/**
+     * Format the custom notification
+     */
+    public function activity_loop_start_callback( $user_id, $earned_points ) {
+
+      $user_name = '';
+      $points_type = get_page_by_path(BGC_POINT_TYPE, OBJECT, 'points-type'); // Change 'post' to your CPT if needed
+      $pt_url = '';
+      if ($points_type) {
+          $post_id = $points_type->ID;
+          $pt_url = get_the_post_thumbnail_url( $post_id, 'medium' );
+      }
+      
+      if( $user_id ) {
+        $user_info = get_userdata($user_id);
+        if ($user_info) {
+            $user_name = $user_info->user_login;
+        }
+      }
+      if( intval( $earned_points ) > 0 ) {
+
+        $pt_url = '';
+        if ($points_type) {
+            $post_id = $points_type->ID;
+            add_image_size('bgc-points-icon', 30, 30, true);
+            $pt_url = get_the_post_thumbnail_url( $post_id, 'bgc-points-icon' );
+        }
+
+        $content = sprintf(
+            '<img src="%s" class="bgc-points-icon" style="width: 30px; height: 30px; margin-right: 10px; vertical-align: middle;" />',
+            esc_url($pt_url)
+        );
+        bp_activity_add([
+          'user_id' => $user_id,
+          'component' => 'points',
+          'type' => 'points_earned',
+          'content' => $content.sprintf(__( '%d flags for predicting one question correctly', 'buddyboss', 'bgc-customization' ), intval($earned_points)),
+          'action' => sprintf(__( '%s ha guadagnato %d Bandierine', 'buddyboss', 'bgc-customization' ), $user_name,  intval($earned_points)).' '.sprintf(__( '%s earned %d %s', 'buddyboss', 'bgc-customization' ), $user_name, intval($earned_points), BGC_POINT_TYPE )
+      ]);
+        
+      }
+      
+    }
+
     /**
      * save points to gamipress
      */
@@ -232,7 +232,7 @@ class PSC_Frontend {
             $sql = "SELECT points FROM {$prefix}bonusquestions_useranswers where correct = 1 and user_id='".$user->ID."' order by question_id desc";
             $footbal_points = $wpdb->get_var( $sql );
             
-            update_user_meta( $user->ID , 'bp_last_earned_question_points', (intval( $footbal_points ) - intval( $user_points )) );
+            $this->activity_loop_start_callback( $user->ID, (intval( $footbal_points ) - intval( $user_points )) );
           }
         }
       }
